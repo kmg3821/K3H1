@@ -1,4 +1,7 @@
 clear
+load('CLmaxflapplot.mat');
+load('LoDmaxplot.mat');
+load('TOPplot.mat');
 %%%%%%%%%%%%%%%%%%%%%%%% assumed parameter %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Wc = convmass(100*2,'kg','lbm'); % crew
@@ -31,17 +34,24 @@ altmax = 45000; % service ceiling
 [ans,ans,ans,rhosl] = atmosisa(0);
 rhosl = convdensity(rhosl,'kg/m^3','slug/ft^3'); % sealevel density
 lamAC = atan(tan(lamLE) - (1-lam)/(1+lam)/AR); % aerodynamic center line sweep
-C = 0.8 /3600; % fuel specific consumption
-WS = 30:0.01:100;
+WS = 30:0.01:100; % here, W means W0
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%%%%%%%%%%%%%%%%%%%%% historical trend graph %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%% historical trend %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-LoDmax = 15;
-CLmaxflap = 2.5; % double slotted flap
-if (AR < 4 || AR > 8) warning("AR is out of range for vaild CLmax"); end
-TOP = 90; % single engine ground roll
+[ans,I] = min(abs(LoDmaxplot(:,1) - AR/WAR));
+LoDmax = LoDmaxplot(I,2); % could be different from L/Dmax by drag polar
+
+[ans,I] = min(abs(CLmaxflapplot(:,1) - rad2deg(lamAC)));
+CLmaxflap = CLmaxflapplot(I,2); % double slotted flap
+if (AR < 4 || AR > 8) warning("AR is out of range for vaild CLmax approximation"); end
+
+[ans,I] = min(abs(TOPplot(:,2) - dto/1000));
+TOP = TOPplot(I,1); % single engine ground roll
+
+C = 0.66 /3600; % fuel specific consumption
+habs = 50000; % absolute ceiling
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -126,10 +136,9 @@ plot(WS,TW,'DisplayName','max r/c'); hold on;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%%%%%%%%%%%%%%%%%%%%%%%% climb rate req %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%% time to climb req %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % sealevel
 
-habs = 50000;
 hdot = -habs/tcl*log(1 - alt/habs);
 TW = zeros(1,length(WS));
 i = 0;
@@ -139,7 +148,7 @@ while (i < 100)
     TW = hdot./V + q*CD0./WS + K./q.*WS;
     i = i+1;
 end
-plot(WS,TW,'DisplayName','r/c'); hold on;
+plot(WS,TW,'DisplayName','time to climb'); hold on;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -149,7 +158,7 @@ plot(WS,TW,'DisplayName','r/c'); hold on;
 [ans,ans,ans,rho] = atmosisa(convlength(altmax,'ft','m'));
 rho = convdensity(rho,'kg/m^3','slug/ft^3');
 sigma = rho/rhosl;
-hdot = convvel(500,'ft/min','ft/s');
+hdot = convvel(100,'ft/min','ft/s');
 
 TW = zeros(1,length(WS));
 i = 0;
@@ -159,7 +168,6 @@ while (i < 100)
     TW = hdot./V + q*CD0./WS + K./q.*WS;
     i = i+1;
 end
-
 TW = TW/sigma;
 plot(WS,TW,'DisplayName','sevice ceiling'); hold on;
 
@@ -202,4 +210,3 @@ plot(WS,TW*ones(1,length(WS)),'DisplayName','landing MIL'); hold on;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 legend; hold off;
-
