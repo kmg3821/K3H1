@@ -2,7 +2,7 @@ clear
 %%%%%%%%%%%%%%%%%%%%%%%% assumed parameter %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Wc = convmass(100*2,'kg','lbm'); % crew
-Wp = 248; % payload
+Wp = 248; % payloadㅇㅇㅇㅇ
 WAR = 4; % wetted area ratio
 AR = 5; % aspect ratio
 lamLE = deg2rad(28); % leading edge sweep
