@@ -1,0 +1,205 @@
+clear
+%%%%%%%%%%%%%%%%%%%%%%%% assumed parameter %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Wc = convmass(100*2,'kg','lbm'); % crew
+Wp = 248; % payload
+WAR = 4; % wetted area ratio
+AR = 5; % aspect ratio
+lamLE = deg2rad(28); % leading edge sweep
+lam = 0.6; % taper ratio
+hw = 6; % height from landing gear to wing
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%% requirement parameter %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+R = convlength(800,'naut mi','ft'); % range
+Vc = convvel(450,'kts','ft/s'); % cruise velocity
+alt = 30000; % cruise altitude
+Vs = convvel(90,'kts','ft/s'); % stall speed
+dto = 1400; % takeoff distance
+Sland = 2000; % landing distance
+Vmax = convvel(540,'kts','ft/s'); % maximum speed
+hdotmax = convvel(11200,'ft/min','ft/s'); % maximum climb rate
+tcl = 7 *60; % climb rate
+altmax = 45000; % service ceiling
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%% miscellaneous common parameter %%%%%%%%%%%%%%%%%%%%%%%%%
+
+[ans,ans,ans,rhosl] = atmosisa(0);
+rhosl = convdensity(rhosl,'kg/m^3','slug/ft^3'); % sealevel density
+lamAC = atan(tan(lamLE) - (1-lam)/(1+lam)/AR); % aerodynamic center line sweep
+C = 0.8 /3600; % fuel specific consumption
+WS = 30:0.01:100;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%% historical trend graph %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LoDmax = 15;
+CLmaxflap = 2.5; % double slotted flap
+if (AR < 4 || AR > 8) warning("AR is out of range for vaild CLmax"); end
+TOP = 90; % single engine ground roll
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%% W0 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LoDc = 0.866*LoDmax; % cruise L/D
+
+wuto = 0.97;
+climb = 0.985;
+cruise = exp(-R*C/(Vc*LoDc));
+land = 0.995;
+
+wf = wuto*climb*cruise*land;
+ff = 1.11*(1-wf);
+
+W0 = fzero(@(W0) W0 - (Wc+Wp)/(1 - ff - 1.59*(W0)^(-0.1)), 20000);
+Wf = ff*W0;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% drag polar %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Swet = 10^(0.8565 + 0.5423*log10(W0));
+f = 10^(-2.5229 + log10(Swet)); % Cf = 0.003 assumption
+Sref = W0/50;%Swet/WAR;
+CD0 = f/Sref;
+
+if (lamLE > deg2rad(30)) e = 4.61*(1 - 0.045*AR^(0.68))*(cos(lamLE))^0.15 - 3.1;
+else e = 1.78*(1 - 0.045*AR^(0.68)) - 0.64; end
+K = 1/(pi*e*AR);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+figure(1);
+%%%%%%%%%%%%%%%%%%%%%%%%%% takeoff distance req %%%%%%%%%%%%%%%%%%%%%%%%%%%
+% sealevel, 100% fuel
+
+CLt = CLmaxflap/1.1^2; % MIL spec applied
+WSt = TOP*CLt;
+TW = 1/WSt*WS;
+plot(WS,TW,'DisplayName','takeoff dist'); hold on;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% landing distance req %%%%%%%%%%%%%%%%%%%%%%%%%%%
+% sealevel, 20% fuel
+
+WSl = Sland*CLmaxflap/80 * W0/(W0 - 0.8*Wf);
+xline(WSl,'DisplayName','landing dist');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% stall speed req %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% sealevel, 70% fuel
+
+WSs = 1/2*rhosl*Vs^2*CLmaxflap * (W0/(W0 - 0.3*Wf));
+xline(WSs,'--','DisplayName','stall');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% maximum speed req %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% sealevel, 70% fuel
+
+q = 1/2*rhosl*Vmax^2;
+TW = q*CD0./WS + K/q*((W0 - 0.3*Wf)/W0)^2*WS;
+plot(WS,TW,'DisplayName','max speed'); hold on;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% maximum climb rate req %%%%%%%%%%%%%%%%%%%%%%%%%
+% sealevel
+
+TW = zeros(1,length(WS));
+i = 0;
+while (i < 100)
+    V = sqrt(WS./(3*rhosl*CD0).*(TW + sqrt(TW.^2 + 12*CD0*K)));
+    q = 1/2*rhosl*V.^2;
+    TW = hdotmax./V + q*CD0./WS + K./q.*WS;
+    i = i+1;
+end
+plot(WS,TW,'DisplayName','max r/c'); hold on;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% climb rate req %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% sealevel
+
+habs = 50000;
+hdot = -habs/tcl*log(1 - alt/habs);
+TW = zeros(1,length(WS));
+i = 0;
+while (i < 100)
+    V = sqrt(WS./(3*rhosl*CD0).*(TW + sqrt(TW.^2 + 12*CD0*K)));
+    q = 1/2*rhosl.*V.^2;
+    TW = hdot./V + q*CD0./WS + K./q.*WS;
+    i = i+1;
+end
+plot(WS,TW,'DisplayName','r/c'); hold on;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% service ceiling %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% none
+
+[ans,ans,ans,rho] = atmosisa(convlength(altmax,'ft','m'));
+rho = convdensity(rho,'kg/m^3','slug/ft^3');
+sigma = rho/rhosl;
+hdot = convvel(500,'ft/min','ft/s');
+
+TW = zeros(1,length(WS));
+i = 0;
+while (i < 100)
+    V = sqrt(WS/(3*rho*CD0).*(TW + sqrt(TW.^2 + 12*CD0*K)));
+    q = 1/2*rho*V.^2;
+    TW = hdot./V + q*CD0./WS + K./q.*WS;
+    i = i+1;
+end
+
+TW = TW/sigma;
+plot(WS,TW,'DisplayName','sevice ceiling'); hold on;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% endurance %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% low altitude
+
+E = LoDmax/C*log(W0/(W0 - Wf))/60/60;
+if(E < 2.5) warning("endurance req is not satisfied"); end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%% takeoff climb gradient MIL spec req %%%%%%%%%%%%%%%%%%%%
+% sealevel, gear down, flap
+
+b = sqrt(AR*Sref);
+CD0g = 0.25; % drag by landing gear
+CD0f = 0.0074*0.35*1.1*(30 - 10); % drag by flap
+CD0to = CD0 + CD0g + CD0f;
+Kto = K*(33*(hw/b)^1.5/(1 + 33*(hw/b)^1.5));
+LoDto = CLmaxflap/(CD0to + Kto*CLmaxflap^2);
+
+TW = 0.005 + 1/LoDto;
+plot(WS,TW*ones(1,length(WS)),'DisplayName','takeoff MIL'); hold on;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%% landing climb gradient MIL spec req %%%%%%%%%%%%%%%%%%%%
+% sealevel, gear up, flap
+
+b = sqrt(AR*Sref);
+CD0f = 0.0074*0.35*1.1*(30 - 10); % drag by flap
+CD0l = CD0 + CD0f;
+Kl = K*(33*(hw/b)^1.5/(1 + 33*(hw/b)^1.5));
+LoDl = (CLmaxflap/1.15^2)/(CD0l + Kl*(CLmaxflap/1.15^2)^2);
+
+TW = 0.025 + 1/LoDl;
+plot(WS,TW*ones(1,length(WS)),'DisplayName','landing MIL'); hold on;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+legend; hold off;
+
